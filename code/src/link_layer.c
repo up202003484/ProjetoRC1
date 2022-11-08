@@ -10,6 +10,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <signal.h>
+#include <extra_functions.h>
 
 #define _POSIX_SOURCE 1 // POSIX compliant source
 #define FALSE 0
@@ -29,11 +30,13 @@
 #define Ns   0x40
 #define FALSE 0
 #define TRUE 1
+#define TYPE_SIZE 0x00
+#define CONTROL_START 0x02
 
 // MISC
 #define _POSIX_SOURCE 1 // POSIX compliant source
 
-int *fd;
+int fd;
 struct termios oldtio;
 
 LinkLayer connectionParameters2;
@@ -78,7 +81,7 @@ int llopen(LinkLayer connectionParameters)
 
         while(timeout_count<connectionParameters.nRetransmissions){
             if(alarm_enabled == FALSE){
-                int res = write(fd,frame_SET,5);
+                int res=write(fd,frame_SET,5);
                 sleep(1);
                 printf("RESPOSTA DO WRITE %d\n",res);
                 alarm(connectionParameters.timeout); // 
@@ -90,11 +93,11 @@ int llopen(LinkLayer connectionParameters)
 
             int frame_index=0;
 
-            int flag=1;
+            //int flag=1;
             printf("TRYING TO READ...\n\n");
             while(frame_index<5){
                 //printf("AQUI1\n");
-                int res = read(fd,&elem,1);
+                int res=read(fd,&elem,1);
                 if(res==-1){
                     break;
                 }
@@ -111,7 +114,7 @@ int llopen(LinkLayer connectionParameters)
          
             sleep(1);
 
-            if(state_machine(&received_message,5,connectionParameters.role)==0){
+            if(state_machine(received_message,5,connectionParameters.role)==0){
                 break;
             }
             //printf("AQUI5\n");
@@ -135,18 +138,18 @@ int llopen(LinkLayer connectionParameters)
 
         int frame_index=0;
         while(frame_index<5){
-            int res = read(fd,&elem,1);
+            int res= read(fd,&elem,1);
             printf("RECEIVED SET BYTE->%x %d\n", elem, res);
 
             received_message[frame_index]=elem;
             frame_index++;
         }
 
-        int ans = state_machine(&received_message,5,connectionParameters.role);
+        int ans = state_machine(received_message,5,connectionParameters.role);
         if(ans == 0){
             printf("NO MISTAKES FOUND BY STATE MACHINE\n");    
             printf("SENDING ANWERS TO TRANSMITER\n");
-            int res = write(fd,frame_UA,5);
+            write(fd,frame_UA,5);
             sleep(1);
         }
 
@@ -203,7 +206,7 @@ int llclose(int showStatistic){
 
             int frame_index=0;
 
-            int flag=1;
+            //int flag=1;
             printf("TRYING TO READ...\n\n");
             while(frame_index<5){
                 //printf("AQUI1\n");
@@ -224,7 +227,7 @@ int llclose(int showStatistic){
          
             sleep(1);
 
-            if(state_machine_close(&received_message,5,connectionParameters2.role)==0){
+            if(state_machine_close(received_message,5,connectionParameters2.role)==0){
                 break;
             }
             //printf("AQUI5\n");
@@ -265,11 +268,11 @@ int llclose(int showStatistic){
             frame_index++;
         }
 
-        int ans = state_machine_close(&received_message,5,connectionParameters2.role);
+        int ans = state_machine_close(received_message,5,connectionParameters2.role);
         if(ans == 0){
             printf("NO MISTAKES FOUND BY STATE MACHINE\n");    
             printf("SENDING ANWERS TO TRANSMITER\n");
-            int res = write(fd,frame_DISC,5);
+            write(fd,frame_DISC,5);
             sleep(1);
         }
 
@@ -293,7 +296,7 @@ int llclose(int showStatistic){
         }
 
 
-        ans = state_machine_close(&received_message,5,connectionParameters2.role);
+        ans = state_machine_close(received_message,5,connectionParameters2.role);
         if(ans == 0){
             printf("NO MISTAKES FOUND BY STATE MACHINE\n");    
          
@@ -314,178 +317,123 @@ int llclose(int showStatistic){
 
 
 
-unsigned char* byte_stuffing(  unsigned char* msg[], int length){
-    printf("SIZE OF dentro DO BUFFING: %x\n",msg[0]);
-
-	unsigned char* str;
-	int i=0;
-	int j=0;
-	unsigned int array_length = length;
-	str = (unsigned char *) malloc(array_length);
-	for(; i < length; i++, j++){
-
-		if(j >= array_length){
-			array_length = array_length+(array_length/2);
-			str = (unsigned char*) realloc(str, array_length);
-
-		}
-		if(msg[i] ==  0x7e){
-			str[j] = 0x7d;
-			str[j+1] = 0x5e;
-			j++;
-		}
-		else if(msg[i] == 0x7d){
-			str[j] = 0x7d;
-			str[j+1]= 0x5d;
-			j++;
-		}
-		else{
-			str[j] = msg[i];
-		}
-	}
-	length = j;
-	//free(msg);
-
-	return str;
-}
-
-
-
 
 int llwrite(const unsigned char *buf, int bufSize){
-
     printf("\n");
     printf("///////////////////////////   LLWIRTE    /////////////////////////\n");
     printf("\n");
 
-    (void)signal(SIGALRM,alarmHandler);
-    (void)siginterrupt(SIGALRM,TRUE);  //system call interrupt by alarm isnt restarted
 
     printf("READING FILE\n\n");
-    unsigned char trama[100];      //10000 bytes de tamanho;
 
-    FILE *ptr = fopen("penguin.gif","rb");  // r for read, b for binary  // open ficheiro original do penguim
-    if(ptr == NULL)
-    {
-        //falha a abrir o penguim original
-        printf("Error!");   
-        exit(1);             
-    }
+    int c=0;
+    int contador_de_info_enviada=0;
 
-    struct stat st;
-    stat("penguin.gif", &st);
-    int size = st.st_size;
-    printf("TAMANHO: %d\n", size);
+    int x=0;
+    while(c!=457){
+
+        int data_size_each_packet = bufSize/457;
+        printf("DATA PACKET SIZE INFORMATION WITHOUT STUFFING-> %d\n", data_size_each_packet);
 
 
-    
-    unsigned char buffer[94];  //////////change 100
-    int count=0;
+        unsigned char data_to_send_each_interection[data_size_each_packet];
 
-    trama[0]=FLAG;
-    trama[1]=A;
-    trama[2]=0x00;
-    trama[3]=BCC;
-    printf("BUILDING TRAMA TO WITH FILE INFO\n");
+        for(int i=0 ;i< data_size_each_packet;i++){
+            data_to_send_each_interection[i]=buf[contador_de_info_enviada];
+            printf("BYTES NOT STUFFED:  %x INDEX: %d\n",data_to_send_each_interection[i],x);
+            x+=1;
+            if(data_to_send_each_interection[i]==  0x7e){
+                printf("\nAQUIIIIIIIIIIIIIIII FAZ STUFFING!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            }
+            contador_de_info_enviada++;
+        }
 
-    (void)signal(SIGALRM,alarmHandler);
-    (void)siginterrupt(SIGALRM,TRUE);  //system call interrupt by alarm isnt restarted
+        printf("\n\nESTADO do contador GLOBAL %d\n",contador_de_info_enviada);
 
-    int contador=0;
-    while(TRUE){
+
+        unsigned char control_packet[10];
+        unsigned char data_packet[2000];
+
+        data_packet[0]=FLAG;
+        data_packet[1]=A;
+        data_packet[2]=0x00;
+        data_packet[3]=BCC;
+
+        printf("AQUI1\n");
         
-        unsigned char bcc2 = 0x00;
-        //printf("COUNT->\n %d ",count);
-        fread(buffer,sizeof(buffer),1,ptr); // reads 94 bytes to our buffer
 
-        ///////////////////////////////////////////////////////////////////////
 
-        int length=94;
-        unsigned char* str;
-        int i=0;
+        unsigned char bcc2 = 0x00;      //criou bbc2 para a primeira trama de informacao
+        for(int i=0; i < data_size_each_packet; i++){
+            bcc2 ^=data_to_send_each_interection[i];
+        }
+
+
+        printf("BBC2 CURRENT: %x \n",bcc2);
+
+
         int j=0;
-        unsigned int array_length = length;
-        str = (unsigned char *) malloc(array_length);
-        for(; i < length; i++, j++){
+        for(int i=0;i<data_size_each_packet;i++){
+            if(data_to_send_each_interection[i] ==  0x7e){
+                data_packet[j+4] = 0x7d;
+                data_packet[j+5] = 0x5e;
+                j+=2;
+                
+                
+            }
 
-            if(j >= array_length){
-                array_length = array_length+(array_length/2);
-                str = (unsigned char*) realloc(str, array_length);
+            else if(data_to_send_each_interection[i] == 0x7d){
+                data_packet[j+4] = 0x7d;
+                data_packet[j+5]= 0x5d;
+                j+=2;
+                
+        
+            }
 
-            }
-            if(buffer[i] ==  0x7e){
-                str[j] = 0x7d;
-                str[j+1] = 0x5e;
-                j++;
-            }
-            else if(buffer[i] == 0x7d){
-                str[j] = 0x7d;
-                str[j+1]= 0x5d;
-                j++;
-            }
             else{
-                str[j] = buffer[i];
-            }
-        }
-        length = j;
-
-        unsigned char final[length+6];  //////////change 100
-        final[0]=FLAG;
-        final[1]=A;
-        final[2]=0x00;
-        final[3]=BCC;
-
-        for(int i=0;i<length;i++){
-            printf("BYTE STUFFED-> %x INDEX: %d \n",str[i],i );  //str é informacao stuffed
-            final[i+4]=str[i];      // final e a ttrama que vou mandar
-        }
-        unsigned char bcc2_2 = 0x00;
-        for(int i=0; i<94; i++){
-		    bcc2_2 ^=buffer[i];
-	    }
-        printf("BCC2:  %x \n",bcc2_2);
-        printf("FLAG:  %x \n",FLAG);
-        printf("LENGTH: %d\n",length);
-
-        final[length+4]=bcc2_2;
-        final[length+5]=FLAG;
-
-        printf(" 7777777777777777777777777777\n");
-        for(int i=0;i<length+6;i++){
-            printf("BYTE TRAMA FINAL-> %x INDEX: %d \n",final[i],i );  //str é informacao stuffed
+                data_packet[j+4] = data_to_send_each_interection[i];
+                j++;
+            }  
         }
 
 
 
-        ///////////////////////////////////////////////////////////////////////
+        data_packet[j+4]=bcc2;
+        data_packet[j+5]=FLAG;
 
-        for(int i=0; i<94; i++){
-		    bcc2 ^=buffer[i];
-	    }
-
-        
-        printf("CREATING BCC2->%x\n" ,bcc2);
-        
-        for(int i=0;i<94;i++){
-            trama[i+4]=buffer[i];
-            
+        /*
+        for(int i=0 ; i<j+6 ;i++){
+            printf("BYTES STUFFED:  %x INDEX: %d\n",data_packet[i],i);
         }
+        */
 
-        trama[98]=bcc2;
-        trama[99]=FLAG;
+        printf("CURRENT J VALUE: %d\n", j+6);
 
+        control_packet[0] = CONTROL_START;      // INDICA INICO DO PACOTE DE CONTROLO
+        control_packet[1] = TYPE_SIZE;          //INDICA QUE VOU MANDAR UM TAMANHO
+        control_packet[2] = j+6;
+        printf("AQUI4\n");
+
+
+        int res;
+        //res = write(fd,control_packet,3);
+        //res = write(fd,data_packet,j+6);
+
+        (void)signal(SIGALRM,alarmHandler);
+        (void)siginterrupt(SIGALRM,TRUE);  //system call interrupt by alarm isnt restarted
 
         alarm_enabled=FALSE;
         timeout_count=0;
 
-        while(timeout_count<3){
 
+        //////////////////////////////////////////////////////////////////
+        while(timeout_count<connectionParameters2.nRetransmissions){
             if(alarm_enabled == FALSE){
-                printf("SENDING TRAMA TO READER\n");
-                int res = write(fd,trama,100);  /////mudar aquiiiiiiii
-                //sleep(1);
+                res = write(fd,control_packet,3);
+                res = write(fd,data_packet,j+6);
+
                 printf("RESPOSTA DO WRITE %d\n",res);
-                alarm(3); // 
+                alarm(connectionParameters2.timeout); // 
                 alarm_enabled=TRUE;
             }
 
@@ -494,48 +442,37 @@ int llwrite(const unsigned char *buf, int bufSize){
 
             int frame_index=0;
 
-            int flag=1;
             printf("TRYING TO READ...\n\n");
             while(frame_index<5){
                 //printf("AQUI1\n");
-                int res = read(fd,&elem,1);
+                res = read(fd,&elem,1);
                 if(res==-1){
                     break;
-            }   
-    
-            printf("RECEIVED RR1 BYTE-> %x %d\n", elem, res);
+                }
+                
 
-            received_message[frame_index]=elem;
-            frame_index++;
-            
+                //printf("AQUI2\n");
+                printf("RECEIVED RR BYTE-> %x %d\n", elem, res);
+                //printf("AQUI3\n");
+                received_message[frame_index]=elem;
+                frame_index++;
             }
 
-            if(state_machineRR(&received_message,5)==0){
+            //printf("AQUI4\n");
+         
+
+            if(state_machineRR(received_message,5)==0){
                 break;
             }
-
-            if(state_machineRR(&received_message,5)==-1){
-                printf("ERROR IN STATE MACHINE , SENDING AND READING AGAIN READING AGAIN!\n");
-            
-            }
-      
-          
-           
+            //printf("AQUI5\n");
         }
 
-        //sleep(1);
 
-        count+=94;
-        if(count>10900){
-            break;
-        }
-        contador++;
-        printf("CONTADOR DE INTERACOES: %d\n\n",contador);
+        c++;
     }
 
- 
-    fclose(ptr);// fecha ficheiro
-
+    //fclose(ptr);// fecha ficheiro
+    return 0;
 }
 
 
@@ -545,7 +482,7 @@ int llwrite(const unsigned char *buf, int bufSize){
 int llread(unsigned char *packet)
 {
 
-    unsigned char frame_RR1[5]= {FLAG,COMANDO_EMMISSOR_A,RR1,BCC_EMISSOR,FLAG};
+    //unsigned char frame_RR1[5]= {FLAG,COMANDO_EMMISSOR_A,RR1,BCC_EMISSOR,FLAG};
     unsigned char frame_RR0[5]= {FLAG,COMANDO_EMMISSOR_A,RR0,BCC_EMISSOR,FLAG};
 
     printf("\n");
@@ -553,7 +490,7 @@ int llread(unsigned char *packet)
     printf("\n");
 
     
-    
+    /*
     FILE *file;
     if ((file = fopen("new.gif", "wb")) == NULL) {              //criei/abri ficheiro onde vou colocar copia do penguim
         printf("Not possible to create file!\n");
@@ -562,112 +499,161 @@ int llread(unsigned char *packet)
 
     printf("CREATING/UPDATING NEW.GIF FILE\n");
 
+    */
+    int contador_final=0;
 
- 
     int count=0;
+    while(count!=457){
 
-
-    while(TRUE){
+        unsigned char control[3];
         
-        //////////////////////////////////////7
-        int cont=0;
-        unsigned char trama[200];
-        unsigned char buffer2[94];
+        read(fd,&control,3);  //ler um bit
+        int size = control[2];
+        printf("SIZE: %d\n", size);
 
-        unsigned char buffer_maquina_de_estados[6];
-        int count_maquinadeestados=0;
+        int contador=0;
 
-        int cont_aux=0;
+        int state = 0 ;
+        int flag1 = 0;  //encontrar os 7D coloca a flag a 1
+        int flagD = 0;
+        int flagE = 0;
+        int aux = 0;
 
-        unsigned char final[200];
-        printf("///////////////////////////////////////////////////\n\n");
-        while(TRUE){
+        int count_distuff=0;
 
-            unsigned char bit;
-            int res = read(fd,&bit,1);  //ler um bit
-          
-            printf("BYTE QUE SAI DO READ: %x\n",bit);
-            trama[cont]=bit;             //coloco esste bit na trama
-            final[cont]=bit;
-            printf("BYTE QUE FICA NA TRAMA COM INDEX CORRETO: %x\n", trama[cont]);
+        printf("\n\n\nSENDING NEW TRAMA!!!!!!!!\n\n\n");
+        printf("SIZEEEEEE-> %d\n",size);
+        unsigned char bcc2 = 0x00;      //criou bbc2 para a primeira trama de informacao
+     
+        while(contador!=size){
 
-       
-            printf("CURRENT COUNT: %d \n", cont);
-            if(cont<98 && cont>3){          // se nao forem flags colocamos no buffer2
-                printf("QUERO ESTE BIT\n\n");
-                buffer2[cont_aux]=bit;  //buffer com informacao
-                cont_aux++;
+            if(contador==30){
+                count_distuff=0;
+            }
+            
+            printf("CONTADOR-> %d\n",contador);
+            unsigned char byte;
+            read(fd,&byte,1);  //ler um bit
+            printf("BYTE-> %x\n",byte);
+
+     
+            
+            //printf("STATE: %d\n", state);
+
+            states(byte,&state,&flag1,&flagD,&flagE,&aux );
+
+            //printf("STATE: %d\n", state);
+
+            if((state==5 && flag1== 0 && flagD==0 && flagE==0 && contador<size-2  )|| (state==5 && flag1== 0  && flagE==1  && contador<size-2 )|| (state==5 && flag1== 0  && flagD==1 && contador<size-2 )){
+                printf("ESTE BYTE PODE SER ESCRITO\n");
+                //fwrite(&byte, 1, 1, file);            ////////////586
+                packet[contador_final]=byte;
+                bcc2 ^= byte;
+                printf("CONTADOR: %d\n",contador_final);
+                contador_final++;
+                flag1 = 0;  
+                flagD = 0;
+                flagE = 0;
+                count_distuff=0;
 
             }
-            else{
-                buffer_maquina_de_estados[count_maquinadeestados]=bit;      // se forem flags colocamos no buffer da maquina de estados
-                count_maquinadeestados++;
-                printf("NAO QUERO ESTE BIT\n\n");
+
+            if(state>=4 && flag1== 1 && flagD==0 && flagE==0){
+                printf("ECONTROU O 7D MAS NAO ESCREVE NADA\n");
+              
+                count_distuff++;
+                if(count_distuff==2){
+                    flag1 = 0;  
+                    flagD = 0; //10373
+                    flagE = 0;
+                    unsigned char value = 0x7D;
+                    //write(&value, 1, 1, file);
+                    //fwrite(&value, 1, 1, file);
+                    packet[contador_final]=value;
+                    bcc2 ^= value;
+                    printf("CONTADOR: %d\n",contador_final);
+                    printf("BYTE DISTUFED: %x\n",value);
+                    contador_final++;
+                    count_distuff=0;
+
+                }
+            }
+
+            printf("COUNT_DISTUFF: %d\n",count_distuff);
+
+            if(contador==28){
+                count_distuff=0; //8828
+                if(bcc2==byte){
+                    printf("ENCONTREI O BCC2 IGUAL\n");
+                }
+            }
+
+            if(state>=4 && flag1== 1 && flagD==1 && flagE==0){
+                printf("ENCONTROU UM 5D->fazer distuff\n");
+                unsigned char value = 0x7d;
+                flag1 = 0;  
+                flagD = 0;
+                flagE = 0;
+                //fwrite(&value, 1, 1, file);
+                packet[contador_final]=value;
+                bcc2 ^= value;
+                printf("CONTADOR: %d\n",contador_final);
+                printf("BYTE DISTUFED: %x\n",value);
+                contador_final++;
+                count_distuff=0;
+
 
             }
 
-       
-            cont++;
-            if(cont>99 && bit == 0x7e){    // se encontrar a FLAG DA BRAKE   //tenho no final a trama todo ainda por da disstuffe a informcao
 
-                /////////////////////////////////////////////////////////////////
-                break;
+            if(state>=4 && flag1== 1 && flagD==0 && flagE==1){
+                printf("ENCONTROU UM 5E>fazer distuff\n");
+                unsigned char value = 0x7E;
+                flag1 = 0;  
+                flagD = 0;
+                flagE = 0;
+                //fwrite(&value, 1, 1, file);
+                packet[contador_final]=value;
+                bcc2 ^= value;
+                printf("CONTADOR: %d\n",contador_final);
+                printf("BYTE DISTUFED: %x\n",value);
+                contador_final++;
+
             }
 
+
+            printf("STATE: %d\n", state);
+            printf(" \n");
+   
+            contador++;
+
+            if(aux==1){
+            state=5;
+            printf("INCREMETOU O STATE\n");
+            aux=0;
+            }
         }
 
 
-        ////////////////////////////////////////////
-        printf("TERMINEI DE CONTRUIR A TRAMA\n");
-
-        for(int i=0;i<94;i++){
-            //buffer2[i]=trama[4+i];
-            printf("BYTE-> %x\n",buffer2[i]);
-        }
-
-        for(int i=0;i<6;i++){
-            //buffer2[i]=trama[4+i];
-            printf("BYTE da MQUINA DE ESTADOS-> %x\n",buffer_maquina_de_estados[i]);
-        }
-        
-        /*
-        int x = info_state_machine(buffer_maquina_de_estados,6);
-        if(x==-1){
-            printf("ERROR IN STATE MACHINE\n");
-            //break;
-        }
-        */
-
-        fwrite(buffer2, 94, 1, file);
-
-
-        //if(res!=-1){
-        printf("SENDING TO ANSWER TO EMISSOR\n");
-        int response = write(fd,frame_RR1,5);
-            //sleep(1);
-        //}
-
-        /*
-    
-        printf("BUFFER QUE VOU USAR PARA CONTRUIR O NOVO GIF");
-        for(int i=0;i<100;i++){
-            //buffer2[i]=trama[4+i];
-            printf("BYTE-> %x\n",trama[i]);
-        }
-        printf("WRITING TO NEW FILE\n\n");
-        fwrite(buffer2, 94, 1, file);
-        //sleep(1);
-        */
-
-        count+=94;
-        if(count>10900){
-            break;
-        }
+        write(fd,frame_RR0,5);
+        printf("SENDING TRAMA TO LLWRITE, ALL BYTES WERE PASSED!\n");
+        count++;
     }
 
-    fclose(file); 
-    return 0;
+    /*
+    for(int i=0; i<300 ;i++){
+        printf("BYTESSS PARA O PACKET: %x\n",packet[i]);
+    }
+    */
+
+
+    return 1;
+ 
 }
+
+
+
+
 
 
 

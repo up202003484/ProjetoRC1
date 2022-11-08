@@ -1,7 +1,7 @@
 #include <extra_functions.h>
 #include "link_layer.h"
 
-extern int *fd;
+extern int fd;
 extern struct termios oldtio;
 
 void set_serial_port(char *port, int baudRate){
@@ -62,16 +62,7 @@ void set_serial_port(char *port, int baudRate){
     printf("PORT IS OPEN\n\n");
 }
 
-int sending_reading(LinkLayer connectionParameters){
-    if(connectionParameters.role==LlTx){
-        llwrite("ola",4);
-    }
 
-    if(connectionParameters.role==LlRx){
-        llread("ola");
-    }
-
-}
 
 int state_machine(unsigned char *double_word,int size,LinkLayerRole role){
     printf("\nENTROU NA MAQUINA DE ESTADOS\n");
@@ -106,14 +97,14 @@ int state_machine(unsigned char *double_word,int size,LinkLayerRole role){
             case 2:
                 //printf("state 2\n");
                 if(role==LlTx ){
-                    if(double_word[i]=C ){
+                    if(double_word[i]==U ){
                     state=3;
                     break;
                     }
                 }
 
                 if(role==LlRx ){
-                    if(double_word[i]=U){
+                    if(double_word[i]==C){
                     state=3;
                     break;
                     }
@@ -266,18 +257,18 @@ int state_machine_close(unsigned char *double_word,int size,LinkLayerRole role){
             case 2:
                 //printf("state 2\n");
                 if(role==LlTx ){
-                    if(double_word[i]=DISC ){
+                    if(double_word[i]==DISC ){
                     state=3;
                     break;
                     }
                 }
 
                 if(role==LlRx ){
-                    if(double_word[i]=DISC){
+                    if(double_word[i]==DISC){
                     state=3;
                     break;
                     }
-                    if(double_word[i]=UA_EMISSOR){
+                    if(double_word[i]==UA_EMISSOR){
                     state=3;
                     break;
                     }
@@ -291,7 +282,7 @@ int state_machine_close(unsigned char *double_word,int size,LinkLayerRole role){
 
             case 3:
                 //printf("state 3\n");
-                if(double_word[i]==COMANDO_EMMISSOR_A^DISC){
+                if(double_word[i]==(COMANDO_EMMISSOR_A^DISC)){
                     state=4;
                     break;
                 }
@@ -444,3 +435,66 @@ int info_state_machine(unsigned char *double_word,int size){
 
 }
 
+void states( unsigned char byte, int *state, int *flag1, int *flagD, int *flagE,int *aux ){
+    printf("IN STATE MACHINE\n");
+    switch (byte){
+        case 0x7E:
+            if(*state==0){
+                *state=1;  //primeira FLAG COLOCA STATE A 1
+                break;
+            }
+
+            if(*state==5){
+                printf("CHEGAMOS AO FIM DA TRAMA!!!\n");
+                *state=6;  //primeira FLAG COLOCA STATE A 1
+                break;
+            }
+            
+        case 0x03:
+            if(*state==1){
+                *state=2; //COLOCA STATE A 2
+                 break;
+            }
+
+        case 0x00:
+            if(*state==2){
+                *state=3; //COLOCA STATE A 2
+                 break;
+            }
+            if(*state==3){
+                *state=4; //COLOCA STATE A 2
+                *aux=1;
+                break;
+            }
+
+        case 0x7D:
+            if(byte==0x00){
+                break;
+            }
+            
+            if(byte!=0x7D){
+                break;
+            }
+
+            printf("BYTEEE DENTRO DA STATE MACHINE %x\n",byte);
+            
+            *flag1=1;
+          
+            printf("ENCONTROU O 7D\n");
+            break;
+
+        case 0x5D:
+            *flagD=1;
+            printf("ENCONTROU O 5D\n");
+            break;
+
+        case 0x5E:
+            *flagE=1;
+            printf("ENCONTROU O 5E\n");
+            break;
+        
+
+    break;
+   
+    }
+}

@@ -50,14 +50,78 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
   
     llopen(dl_layer);
-    sleep(3);
-    printf("SLEEP 3 SECOND\n\n");
-    sending_reading(dl_layer);
-    sleep(1);
-    printf("SLEEP 3 SECOND\n\n");
+    
+    int size;
+
+
+    if(dl_layer.role==LlTx){
+        FILE *ptr = fopen(filename,"rb");  // r for read, b for binary  // open ficheiro original do penguim
+        if(ptr == NULL)
+        {
+            //falha a abrir o penguim original
+            printf("Error!");   
+            exit(1);             
+        }
+
+                
+        struct stat st;
+        stat("penguin.gif", &st);
+        size = st.st_size;
+
+        printf("TAMANHO DO FICHEIRO : %d\n", size);
+
+        unsigned char buffer[size];  //buffer with all the file BYTES
+        fread(buffer,size,1,ptr); 
+
+
+
+
+      
+
+        llwrite(buffer,size);
+
+        printf("TAMANHO DO FICHEIRO : %d\n", size);
+        fseek(ptr, 0, SEEK_END);
+        // Printing position of pointer
+        printf(" TAMANHO VERDADEIRO %ld", ftell(ptr));
+
+        /*
+        for(int i=0; i<size;i++){
+            printf("BYTESSS PARA O FILE: %x INDEX: %d \n",buffer[i],i);
+
+        }
+        */
+
+        fclose(ptr);// fecha ficheiro
+
+    }
+
+    if(dl_layer.role==LlRx){
+
+        FILE *file;
+        if ((file = fopen("new.gif", "wb")) == NULL) {              //criei/abri ficheiro onde vou colocar copia do penguim
+            printf("Not possible to create file!\n");
+        }
+
+        unsigned char packet[15000];
+
+        printf("CREATING/UPDATING NEW.GIF FILE\n");
+     
+        llread(packet);
+
+        for(int i=0; i<10968;i++){
+            unsigned char value = packet[i];
+            //printf("BYTESSS PARA O FILE: %x INDEX: %d \n",value,i);
+            fwrite(&value, 1, 1, file);
+        }
+    
+        fclose(file);// fecha ficheiro
+
+    }
+
     llclose(1);
 
-    
+
 
     
 }

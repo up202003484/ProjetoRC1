@@ -33,7 +33,7 @@
 #define FALSE 0
 #define TRUE 1
 
-int sending_reading(LinkLayer connectionParameters);       
+
 
 void set_serial_port(char *port, int baudRate);
 
@@ -46,5 +46,7 @@ int state_machine(unsigned char *double_word,int size,LinkLayerRole role);
 int state_machineRR(unsigned char *double_word,int size);
 
 int info_state_machine(unsigned char *double_word,int size);
+
+void states( unsigned char byte, int *state, int *flag1, int *flagD, int *flagE,int *aux);
 
 #endif // _APPLICATION_LAYER_H_
